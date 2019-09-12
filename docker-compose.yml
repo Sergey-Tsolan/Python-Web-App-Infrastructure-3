@@ -1,0 +1,220 @@
+version: '2.4'
+
+services:
+
+
+############################## NGINX load-balancer ###############################
+
+  nginx:
+    image: imkulikov/nginx-sticky:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./load-balancer.conf:/etc/nginx/nginx.conf
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.2
+
+#################################### Server 1 ####################################
+
+  app_s1:
+    build: ./s1
+    image: app_s1
+    container_name: app_s1
+    env_file:
+      - app_s1.env
+    volumes:
+      - .:/usr/src/app_s1
+    command: gunicorn -b :8000 app:app
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.3
+
+
+  migration_s1:
+    image: app_s1
+    container_name: migration_s1
+    env_file:
+      - app_s1.env
+    depends_on:
+      - postgres_s1
+    entrypoint: ./wait-for-it.sh postgres_s1:5432 -- python manage.py db upgrade
+    restart: on-failure
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.4
+
+
+  worker_s1:
+    image: app_s1
+    container_name: worker_s1
+    env_file:
+      - app_s1.env
+    depends_on:
+      - redis_s1
+    entrypoint: ./wait-for-it.sh redis_s1:6379 -- python worker.py
+    restart: on-failure
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.5
+
+
+  postgres_s1:
+    image: postgres:9.4-alpine
+    container_name: postgres_s1
+    environment:
+      POSTGRES_DB: wordcount_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.6
+       
+
+  redis_s1:
+    image: redis:3.0.7-alpine
+    container_name: redis_s1
+    command: redis-server --requirepass secretpassword
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.7
+
+#################################### Server 2 ####################################
+
+  app_s2:
+    build: ./s2
+    image: app_s2
+    container_name: app_s2
+    env_file:
+      - app_s2.env
+    volumes:
+      - .:/usr/src/app_s2
+    command: gunicorn -b :8000 app:app
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.8
+
+
+  migration_s2:
+    image: app_s2
+    container_name: migration_s2
+    env_file:
+      - app_s2.env
+    depends_on:
+      - postgres_s2
+    entrypoint: ./wait-for-it.sh postgres_s2:5432 -- python manage.py db upgrade
+    restart: on-failure
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.9
+
+
+  worker_s2:
+    image: app_s2
+    container_name: worker_s2
+    env_file:
+      - app_s2.env
+    depends_on:
+      - redis_s2
+    entrypoint: ./wait-for-it.sh redis_s2:6379 -- python worker.py
+    restart: on-failure
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.10
+
+
+  postgres_s2:
+    image: postgres:9.4-alpine
+    container_name: postgres_s2
+    environment:
+      POSTGRES_DB: wordcount_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.11
+       
+
+  redis_s2:
+    image: redis:3.0.7-alpine
+    container_name: redis_s2
+    command: redis-server --requirepass secretpassword
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.12
+
+#################################### Server 3 ####################################
+
+  app_s3:
+    build: ./s3
+    image: app_s3
+    container_name: app_s3
+    env_file:
+      - app_s3.env
+    volumes:
+      - .:/usr/src/app_s3
+    command: gunicorn -b :8000 app:app
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.13
+
+
+  migration_s3:
+    image: app_s3
+    container_name: migration_s3
+    env_file:
+      - app_s3.env
+    depends_on:
+      - postgres_s3
+    entrypoint: ./wait-for-it.sh postgres_s3:5432 -- python manage.py db upgrade
+    restart: on-failure
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.14
+
+
+  worker_s3:
+    image: app_s3
+    container_name: worker_s3
+    env_file:
+      - app_s3.env
+    depends_on:
+      - redis_s3
+    entrypoint: ./wait-for-it.sh redis_s3:6379 -- python worker.py
+    restart: on-failure
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.15
+
+
+  postgres_s3:
+    image: postgres:9.4-alpine
+    container_name: postgres_s3
+    environment:
+      POSTGRES_DB: wordcount_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.16
+       
+
+  redis_s3:
+    image: redis:3.0.7-alpine
+    container_name: redis_s3
+    command: redis-server --requirepass secretpassword
+    networks:
+      app_net:
+        ipv4_address: 172.16.238.17
+
+#################################### Network #####################################
+
+networks:
+  app_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.238.0/24
+          gateway: 172.16.238.1
